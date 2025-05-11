@@ -30,6 +30,10 @@ services:
       - INFLUXDB_ADMIN_PASSWORD=admin123
       - INFLUXDB_USER=k6
       - INFLUXDB_USER_PASSWORD=k6pass
+      - INFLUXDB_HTTP_WRITE_TIMEOUT=30s
+      - INFLUXDB_DATA_CACHE_MAX_MEMORY_SIZE=256m
+      - INFLUXDB_HTTP_FLUX_ENABLED=false   # Disable if not needed
+      - INFLUXDB_DATA_QUERY_LOG_ENABLED=false  # Reduce logging overhea
     volumes:
       - ./init-influx.sh:/docker-entrypoint-initdb.d/init-influx.sh
       - influxdb-data:/var/lib/influxdb
@@ -61,6 +65,9 @@ networks:
       config:
         - subnet: 172.20.0.0/24
           gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
+      com.docker.network.bridge.enable_icc: "true"
 
 volumes:
   influxdb-data:
