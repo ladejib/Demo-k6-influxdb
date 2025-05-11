@@ -1,22 +1,33 @@
+version: '3.8'
 
 services:
   k6:
     image: grafana/k6:latest
     container_name: k6-runner
-    dns: 8.8.8.8  # Explicit DNS server
+    # Explicitly set command with out parameter
+    command: run --out influxdb=http://influxdb:8086/k6db /scripts/test.js
+    dns: 8.8.8.8
     dns_search: .
     volumes:
       - ./k6/scripts:/scripts
-    depends_on:
-      - influxdb
     environment:
-      - K6_OUTFLUXDB_URL=http://influxdb:8086/k6db
       - K6_OUTFLUXDB_USERNAME=k6
       - K6_OUTFLUXDB_PASSWORD=k6pass
+      # Add HTTP timeout settings
+      - K6_REQUEST_TIMEOUT=60000
+      - K6_TIMEOUT=60000
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     networks:
       k6-net:
         aliases:
           - k6.local
+    depends_on:
+      influxdb:
+        condition: service_healthy
 
   influxdb:
     image: influxdb:1.8.10
@@ -30,31 +41,51 @@ services:
       - INFLUXDB_ADMIN_PASSWORD=admin123
       - INFLUXDB_USER=k6
       - INFLUXDB_USER_PASSWORD=k6pass
+      # Performance tuning parameters
       - INFLUXDB_HTTP_WRITE_TIMEOUT=30s
       - INFLUXDB_DATA_CACHE_MAX_MEMORY_SIZE=256m
-      - INFLUXDB_HTTP_FLUX_ENABLED=false   # Disable if not needed
-      - INFLUXDB_DATA_QUERY_LOG_ENABLED=false  # Reduce logging overhea
+      - INFLUXDB_HTTP_FLUX_ENABLED=false
+      - INFLUXDB_DATA_QUERY_LOG_ENABLED=false
     volumes:
       - ./init-influx.sh:/docker-entrypoint-initdb.d/init-influx.sh
       - influxdb-data:/var/lib/influxdb
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
     networks:
       k6-net:
         aliases:
           - influxdb.local
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.0.0
+    container_name: grafana
     ports:
       - "3000:3000"
-    depends_on:
-      - influxdb
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning  # Optional: auto provision
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     networks:
       k6-net:
         aliases:
           - grafana.local
+    depends_on:
+      - influxdb
 
 networks:
   k6-net:
