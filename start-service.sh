@@ -8,3 +8,5 @@ docker-compose up -d influxdb
 sleep 30
 
 docker-compose up -d grafana
+
+docker-compose up k6
